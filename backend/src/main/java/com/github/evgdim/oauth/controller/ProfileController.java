@@ -18,7 +18,7 @@ import java.net.http.HttpResponse;
 import java.util.Arrays;
 import java.util.Optional;
 
-@RestController()
+@RestController
 @RequestMapping("/profile")
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class ProfileController {
@@ -42,7 +42,7 @@ public class ProfileController {
                 .header("Authorization", "Bearer "+cookie.getValue())
                 .build();
         String body = client.send(profileReq, HttpResponse.BodyHandlers.ofString()).body();
-        return objectMapper.readValue(body, UserProfile.class);
+        return objectMapper.readValue(body, UserProfile.class);//TODO handle errors when http code is not 200
     }
 }
 

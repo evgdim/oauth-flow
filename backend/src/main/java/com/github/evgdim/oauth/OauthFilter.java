@@ -1,8 +1,8 @@
 package com.github.evgdim.oauth;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -12,21 +12,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 @Component
 public class OauthFilter extends OncePerRequestFilter {
-    private HttpClient client = HttpClient.newHttpClient();
-    private final ObjectMapper jackson;
 
-    public OauthFilter(ObjectMapper jackson) {
+    private final ObjectMapper jackson;
+    private final AuthService authService;
+
+    public OauthFilter(ObjectMapper jackson, AuthService authService) {
         this.jackson = jackson;
+        this.authService = authService;
     }
 
     @Override
@@ -37,14 +35,19 @@ public class OauthFilter extends OncePerRequestFilter {
         }
 
         Cookie[] cookies = request.getCookies();
-        Optional<Cookie> accessTokenCookie = Arrays.stream(cookies).filter(cookie -> cookie.getName().equals(Constants.COOKIE_ACCESS_TOKEN)).findFirst();
+        Optional<Cookie> accessTokenCookie = Arrays.stream(cookies).filter(cookie -> cookie.getName().equals(Constants.COOKIE_ID_TOKEN)).findFirst();
         if(accessTokenCookie.isPresent()){
             Cookie cookie = accessTokenCookie.get();
-            TokenValidationResponse tokenValidationResponse = validateAccessToken(cookie.getValue());
+            GoogleIdToken tokenValidationResponse = null;
+            try {
+                tokenValidationResponse = authService.validateIdToken(cookie.getValue());
+            } catch (GeneralSecurityException e) {
+                throw new RuntimeException(e);
+            }
             if(tokenValidationResponse != null) {//TODO needs better validation of the response
                 filterChain.doFilter(request, response);
                 return;
-            };
+            }
         } else {
             try {
                 response.setStatus(403);
@@ -55,22 +58,7 @@ public class OauthFilter extends OncePerRequestFilter {
         }
     }
 
-    //TODO extract to utils class
-    private TokenValidationResponse validateAccessToken(String accessToken) throws JsonProcessingException {
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=" + accessToken))
-                .POST(HttpRequest.BodyPublishers.noBody())
-                .build();
-
-        HttpResponse<String> response = null;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        return jackson.readValue(response.body(), TokenValidationResponse.class);
-    }
 
 
 }

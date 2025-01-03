@@ -1,25 +1,18 @@
 package com.github.evgdim.oauth.controller;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.evgdim.oauth.AuthService;
 import com.github.evgdim.oauth.Constants;
+import com.github.evgdim.oauth.TokenResponse;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 
 
 @RestController
@@ -33,8 +26,7 @@ public class OAuthController {
     private final String redirectUri;
     private final String scope;
     private final String frontendLocation;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper jackson;
+    private final AuthService authService;
 
     public OAuthController(
             @Value("${oauth.clientId}")
@@ -46,15 +38,13 @@ public class OAuthController {
             @Value("${oauth.scope}")
             String scope,
             @Value("${oauth.frontend.location}")
-            String frontendLocation,
-            ObjectMapper jackson) {
+            String frontendLocation, AuthService authService) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.redirectUri = redirectUri;
         this.scope = scope;
-        this.restTemplate = new RestTemplate();
         this.frontendLocation = frontendLocation;
-        this.jackson = jackson;
+        this.authService = authService;
     }
 
     @GetMapping
@@ -70,35 +60,17 @@ public class OAuthController {
 
     @GetMapping("/code")
     public void code(@RequestParam("code") String code, HttpServletResponse response) throws IOException, InterruptedException {
-        TokenResponse token = getTokenJava(code);
+        TokenResponse token = authService.getTokenFromCode(code);
 
         Cookie accessTokenCookie = buildCookie(Constants.COOKIE_ACCESS_TOKEN, token.accessToken(), 3600);
         response.addCookie(accessTokenCookie);
-        Cookie refreshTokenCookie = buildCookie(Constants.COOKIE_REFRESH_TOKEN, token.accessToken(), 6*3600);
-        response.addCookie(refreshTokenCookie);
+        Cookie idToken = buildCookie(Constants.COOKIE_ID_TOKEN, token.idToken(), 6*3600);
+        response.addCookie(idToken);
 
         response.sendRedirect(frontendLocation);
     }
 
-    //TODO should be extracted in service class
-    private TokenResponse getTokenJava(String code) throws IOException, InterruptedException {
-        String requestBody = "client_id=113294925702-gqfvecvk5b4ndual6brpkc1hircvjhu5.apps.googleusercontent.com" +
-                "&client_secret=BBjk6PL6d0GWAgFppPNMQuWY" +
-                "&grant_type=authorization_code" +
-                "&code=" + code +
-                "&redirect_uri=http://localhost:8080/oauth/code";
 
-        HttpClient client = HttpClient.newHttpClient();
-
-        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                .uri(URI.create("https://accounts.google.com/o/oauth2/token")) // Endpoint URL
-                .header("Content-Type", "application/x-www-form-urlencoded") // Set Content-Type
-                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(requestBody)) // Add the request body
-                .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return jackson.readValue(response.body(), TokenResponse.class);
-    }
 
     private static Cookie buildCookie(String name, String value, int maxAge) {
         Cookie cookie = new Cookie(name, value);
@@ -116,8 +88,3 @@ public class OAuthController {
     }
 }
 
-record TokenResponse(@JsonProperty("access_token") String accessToken,
-                     @JsonProperty("expires_in") Long expiresIn,
-@JsonProperty("scope") String scope,
-                             @JsonProperty("token_type") String tokenType,
-                     @JsonProperty("id_token") String idToken) {}
