@@ -1,5 +1,7 @@
 package com.github.evgdim.oauth.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.evgdim.oauth.Constants;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,8 +23,14 @@ import java.util.Optional;
 @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class ProfileController {
     private HttpClient client = HttpClient.newHttpClient();
+    private final ObjectMapper objectMapper;
+
+    public ProfileController(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @GetMapping
-    public String getProfileInfo(HttpServletRequest request) throws IOException, InterruptedException {
+    public UserProfile getProfileInfo(HttpServletRequest request) throws IOException, InterruptedException {
         //TODO duplicate code with filter
         Cookie[] cookies = request.getCookies();
         Optional<Cookie> accessTokenCookie = Arrays.stream(cookies).filter(cookie -> cookie.getName().equals(Constants.COOKIE_ACCESS_TOKEN)).findFirst();
@@ -33,6 +41,15 @@ public class ProfileController {
                 .GET()
                 .header("Authorization", "Bearer "+cookie.getValue())
                 .build();
-        return client.send(profileReq, HttpResponse.BodyHandlers.ofString()).body();
+        String body = client.send(profileReq, HttpResponse.BodyHandlers.ofString()).body();
+        return objectMapper.readValue(body, UserProfile.class);
     }
 }
+
+record UserProfile(
+        String id,
+        String email,
+        @JsonProperty("verified_email")
+        Boolean verifiedEmail,
+        String picture
+){}

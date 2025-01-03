@@ -5,6 +5,7 @@ import './App.css';
 
 function App() {
   const [url, setUrl] = useState(null);
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     //const response = fetch("http://localhost:8080/oauth");
@@ -34,8 +35,8 @@ function App() {
       method: 'GET',
       credentials: 'include', // Ensure cookies are included
     })
-        .then(response => response.text())
-        .then(data => console.log(data))
+        .then(response => response.json())
+        .then(data => setProfile(data))
   }
 
   return (
@@ -45,6 +46,12 @@ function App() {
         <button onClick={handleTestToken} >Test token</button>
         <button onClick={handleGetProfilen} >Get profile</button>
       </header>
+      {profile && 
+        <div>
+          <h1>{profile.email}</h1>
+          <img src={profile.picture} alt='pic'></img>
+        </div>
+      }
     </div>
   );
 }
